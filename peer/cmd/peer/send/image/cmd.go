@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 func NewCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "send image|text <target username> <image filename>|<desired text>",
+		Use:   "send",
 		Short: "sends text/image to specified username in a P2P way",
 		RunE:  run,
 	}

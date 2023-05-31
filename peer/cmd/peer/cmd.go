@@ -6,9 +6,12 @@ import (
 	"image"
 	"io"
 	"net"
+	"os"
 
+	"github.com/mitchellh/go-homedir"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/ArminGh02/golang-p2p-messenger/internal/protocol"
@@ -21,28 +24,50 @@ import (
 var (
 	logger *logrus.Logger
 
-	tcpPort *uint16
-	udpPort *uint16
+	tcpPort  uint16
+	udpPort  uint16
+	cfgFile  string
+	username string
 )
 
-var (
-	CurrentServer *string
-	Username      *string
-)
+func initConfig() {
+	if cfgFile != "" {
+		viper.SetConfigFile(cfgFile)
+	} else {
+		home, err := homedir.Dir()
+		cobra.CheckErr(err)
 
-func NewCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:     "peer --tcp-port <tcp-port> --udp-port <udp-port> --server <server> --username <username>",
-		Short:   "Command line p2p messenger",
-		PreRunE: run,
+		viper.AddConfigPath(home)
+		viper.AddConfigPath(".")
+		viper.SetConfigName("config")
 	}
 
-	tcpPort = cmd.Flags().Uint16P("tcp-port", "t", 8081, "TCP port to listen on")
-	udpPort = cmd.Flags().Uint16P("udp-port", "u", 8082, "UDP port to listen on")
+	viper.AutomaticEnv()
 
+	if err := viper.ReadInConfig(); err == nil {
+		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+	}
+}
+
+func NewCommand() *cobra.Command {
+	cobra.OnInitialize(initConfig)
+
+	cmd := &cobra.Command{
+		Use:     "peer [flags]",
+		Short:   "Command line p2p messenger",
+		PreRunE: preRun,
+	}
+
+	cmd.Flags().Uint16VarP(&udpPort, "tcp-port", "t", 8081, "TCP port to listen on")
+	cmd.Flags().Uint16VarP(&tcpPort, "udp-port", "u", 8082, "UDP port to listen on")
+	cmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/config.yaml and current directory)")
+	cmd.PersistentFlags().StringVarP(&username, "username", "n", "", "username to use")
 	cmd.PersistentFlags().StringP("server", "s", "http://localhost:8080", "server to connect to")
-	cmd.PersistentFlags().StringP("username", "n", "", "username to use")
-	cmd.MarkPersistentFlagRequired("username")
+
+	viper.BindPFlag("tcp-port", cmd.Flags().Lookup("tcp-port"))
+	viper.BindPFlag("udp-port", cmd.Flags().Lookup("udp-port"))
+	viper.BindPFlag("username", cmd.PersistentFlags().Lookup("username"))
+	viper.BindPFlag("server", cmd.PersistentFlags().Lookup("server"))
 
 	cmd.AddCommand(
 		start.NewCommand(), // start connection to stun
@@ -57,8 +82,8 @@ func NewCommand() *cobra.Command {
 	return cmd
 }
 
-func run(cmd *cobra.Command, args []string) error {
-	if *Username == "" {
+func preRun(cmd *cobra.Command, args []string) error {
+	if username == "" {
 		return fmt.Errorf("username is required")
 	}
 
@@ -78,7 +103,7 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func loopReceiveText(ctx context.Context, out chan<- string) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *tcpPort))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", tcpPort))
 	if err != nil {
 		return err
 	}
@@ -117,7 +142,7 @@ func loopPrintOutput(ctx context.Context, out io.Writer, txtChan <-chan string, 
 		select {
 		case <-ctx.Done():
 			return
-		case _ = <-imgChan:
+		case <-imgChan:
 			// store image and print path
 		case txt := <-txtChan:
 			fmt.Fprintf(out, "received message: %q", txt)
