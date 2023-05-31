@@ -70,6 +70,13 @@ func NewCommand() *cobra.Command {
 	viper.BindPFlag("username", cmd.PersistentFlags().Lookup("username"))
 	viper.BindPFlag("server", cmd.PersistentFlags().Lookup("server"))
 
+	cmd.AddCommand(
+		start.NewCommand(), // start connection to stun
+		list.NewCommand(),  // list all peers
+		get.NewCommand(),   // get peer by username
+		send.NewCommand(),  // send image/text to a peer
+	)
+
 	logger = logrus.New()
 	logger.Out = cmd.OutOrStdout()
 
