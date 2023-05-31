@@ -102,22 +102,21 @@ func run(cmd *cobra.Command, args []string) {
 }
 
 func promptCommand(rootCmd *cobra.Command) *cobra.Command {
-	cmds := map[string]*cobra.Command{
-		"start": start.NewCommand(),
-		"list":  list.NewCommand(),
-		"get":   get.NewCommand(),
-		"send":  send.NewCommand(),
-	}
-
-	for cmdName, cmd := range cmds {
-		rootCmd.Printf("%s: %s\n", cmdName, cmd.Short)
+	for _, cmd := range rootCmd.Commands() {
+		rootCmd.Printf("%s: %s\n", cmd.Name(), cmd.Short)
 	}
 
 	rootCmd.Print("Enter command: ")
 	var cmdName string
 	fmt.Scan(&cmdName)
 
-	return cmds[cmdName]
+	for _, cmd := range rootCmd.Commands() {
+		if cmd.Name() == cmdName {
+			return cmd
+		}
+	}
+
+	return nil
 }
 
 func preRun(cmd *cobra.Command, args []string) error {
