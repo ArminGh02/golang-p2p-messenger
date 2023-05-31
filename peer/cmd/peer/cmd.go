@@ -56,6 +56,7 @@ func NewCommand() *cobra.Command {
 		Use:     "peer [flags]",
 		Short:   "Command line p2p messenger",
 		PreRunE: preRun,
+		Run:     run,
 	}
 
 	cmd.Flags().Uint16VarP(&udpPort, "tcp-port", "t", 8081, "TCP port to listen on")
@@ -69,17 +70,47 @@ func NewCommand() *cobra.Command {
 	viper.BindPFlag("username", cmd.PersistentFlags().Lookup("username"))
 	viper.BindPFlag("server", cmd.PersistentFlags().Lookup("server"))
 
-	cmd.AddCommand(
-		start.NewCommand(), // start connection to stun
-		list.NewCommand(),  // list all peers
-		get.NewCommand(),   // get peer by username
-		send.NewCommand(),  // send image/text to a peer
-	)
-
 	logger = logrus.New()
 	logger.Out = cmd.OutOrStdout()
 
 	return cmd
+}
+
+func run(cmd *cobra.Command, args []string) {
+	for {
+		select {
+		case <-cmd.Context().Done():
+			return
+		default:
+			selectedCmd := promptCommand(cmd)
+			if selectedCmd == nil {
+				cmd.Println("Invalid command\n" + cmd.UsageString())
+				continue
+			}
+			if err := selectedCmd.Execute(); err != nil {
+				logger.Errorln("Error executing command:", "error", err)
+			}
+		}
+	}
+}
+
+func promptCommand(rootCmd *cobra.Command) *cobra.Command {
+	cmds := map[string]*cobra.Command{
+		"start": start.NewCommand(),
+		"list":  list.NewCommand(),
+		"get":   get.NewCommand(),
+		"send":  send.NewCommand(),
+	}
+
+	for cmdName, cmd := range cmds {
+		rootCmd.Printf("%s: %s\n", cmdName, cmd.Short)
+	}
+
+	rootCmd.Print("Enter command: ")
+	var cmdName string
+	fmt.Scan(&cmdName)
+
+	return cmds[cmdName]
 }
 
 func preRun(cmd *cobra.Command, args []string) error {
