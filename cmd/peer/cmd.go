@@ -1,14 +1,14 @@
-package root
+package peer
 
 import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/ArminGh02/golang-p2p-messenger/peer/cmd/peer/get"
-	"github.com/ArminGh02/golang-p2p-messenger/peer/cmd/peer/list"
-	"github.com/ArminGh02/golang-p2p-messenger/peer/cmd/peer/send"
-	"github.com/ArminGh02/golang-p2p-messenger/peer/cmd/peer/start"
+	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer/get"
+	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer/list"
+	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer/send"
+	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer/start"
 )
 
 var logger *logrus.Logger

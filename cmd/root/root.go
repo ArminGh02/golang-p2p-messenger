@@ -1,4 +1,4 @@
-package peer
+package root
 
 import (
 	"context"
@@ -14,8 +14,8 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer"
 	"github.com/ArminGh02/golang-p2p-messenger/internal/protocol"
-	"github.com/ArminGh02/golang-p2p-messenger/peer/cmd/peer/root"
 )
 
 var (
@@ -90,7 +90,7 @@ func loopRunCommand(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		default:
-			if err := root.NewCommand().Execute(); err != nil {
+			if err := peer.NewCommand().Execute(); err != nil {
 				logger.Errorln("Error executing command:", "error", err)
 			}
 		}

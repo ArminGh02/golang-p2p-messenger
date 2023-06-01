@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
-	"github.com/ArminGh02/golang-p2p-messenger/peer/cmd/peer"
-
 	"github.com/sirupsen/logrus"
+
+	"github.com/ArminGh02/golang-p2p-messenger/cmd/root"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 	logger := logrus.New()
 	logger.Out = os.Stdout
 
-	if err := peer.NewCommand().Execute(); err != nil {
+	if err := root.NewCommand().Execute(); err != nil {
 		logger.Fatalln("Error executing command:", "error", err)
 	}
 }

@@ -1,10 +1,10 @@
 package send
 
 import (
-	"github.com/ArminGh02/golang-p2p-messenger/peer/cmd/peer/send/image"
-	"github.com/ArminGh02/golang-p2p-messenger/peer/cmd/peer/send/text"
-
 	"github.com/spf13/cobra"
+
+	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer/send/image"
+	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer/send/text"
 )
 
 func NewCommand() *cobra.Command {
