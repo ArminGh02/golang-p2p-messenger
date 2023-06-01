@@ -10,7 +10,7 @@ import (
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "send image|text <target username> <image filename>|<desired text>",
-		Short: "sends text/image to specified username in a P2P way",
+		Short: "send text/image to specified username in a P2P way",
 		RunE:  run,
 	}
 

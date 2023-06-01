@@ -14,13 +14,13 @@ import (
 func NewCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "lists all peers in the network",
+		Short: "list all peers in the network",
 		RunE:  run,
 	}
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	stunURL, err := cmd.PersistentFlags().GetString("server")
+	stunURL, err := cmd.Flags().GetString("server")
 	if err != nil {
 		panic(err)
 	}

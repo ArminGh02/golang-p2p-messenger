@@ -93,7 +93,7 @@ func loopRunCommand(cmd *cobra.Command) {
 		case <-cmd.Context().Done():
 			return
 		default:
-			cmd.Printf("%s$ ", viper.GetString("username"))
+			cmd.Printf("%s@%s$ ", viper.GetString("username"), viper.GetString("server"))
 
 			scanner.Scan()
 			cmdLine := scanner.Text()

@@ -35,5 +35,7 @@ func NewCommand() *cobra.Command {
 	logger = logrus.New()
 	logger.Out = cmd.OutOrStdout()
 
+	logger.Infoln("successful peer")
+
 	return cmd
 }

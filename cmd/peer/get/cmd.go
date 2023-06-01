@@ -21,7 +21,7 @@ func NewCommand() *cobra.Command {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	stunURL, err := cmd.PersistentFlags().GetString("server")
+	stunURL, err := cmd.Flags().GetString("server")
 	if err != nil {
 		panic(err)
 	}

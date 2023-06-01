@@ -134,6 +134,7 @@ func (s *Stun) listPeers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	resp.OK = true
 	resp.Peers = peers
 	w.WriteHeader(http.StatusOK)
 	enc.Encode(resp)

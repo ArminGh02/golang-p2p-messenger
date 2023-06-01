@@ -14,14 +14,14 @@ import (
 func NewCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "text <target username> <desired text>",
-		Short: "sends a text to specified username in a P2P way",
+		Short: "send a text to specified username in a P2P way",
 		RunE:  run,
 		Args:  cobra.ExactArgs(2),
 	}
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	stunURL, err := cmd.PersistentFlags().GetString("server")
+	stunURL, err := cmd.Flags().GetString("server")
 	if err != nil {
 		panic(err)
 	}

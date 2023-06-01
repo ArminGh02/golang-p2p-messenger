@@ -14,20 +14,20 @@ import (
 
 func NewCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "start <stun address> <username>",
-		Short: "Start peer and connect to STUN with specified username",
+		Use:   "start",
+		Short: "start peer and connect to STUN with specified username",
 		RunE:  run,
-		Args:  cobra.ExactArgs(2),
+		// Args:  cobra.ExactArgs(2),
 	}
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	username, err := cmd.PersistentFlags().GetString("username")
+	username, err := cmd.Flags().GetString("username")
 	if err != nil {
 		panic(err)
 	}
 
-	stunURL, err := cmd.PersistentFlags().GetString("server")
+	stunURL, err := cmd.Flags().GetString("server")
 	if err != nil {
 		panic(err)
 	}
