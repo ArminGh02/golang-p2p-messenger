@@ -1,12 +1,14 @@
 package root
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"image"
 	"io"
 	"net"
 	"os"
+	"strings"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/sirupsen/logrus"
@@ -75,7 +77,7 @@ func run(cmd *cobra.Command, args []string) error {
 	defer close(imgChan)
 
 	go loopPrintOutput(cmd.Context(), cmd.OutOrStderr(), txtChan, imgChan)
-	go loopRunCommand(cmd.Context())
+	go loopRunCommand(cmd)
 
 	group, ctx := errgroup.WithContext(cmd.Context())
 	group.Go(func() error { return loopReceiveText(ctx, txtChan) })
@@ -84,13 +86,22 @@ func run(cmd *cobra.Command, args []string) error {
 	return group.Wait()
 }
 
-func loopRunCommand(ctx context.Context) {
+func loopRunCommand(cmd *cobra.Command) {
+	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-cmd.Context().Done():
 			return
 		default:
-			if err := peer.NewCommand().Execute(); err != nil {
+			cmd.Printf("%s$ ", viper.GetString("username"))
+
+			scanner.Scan()
+			cmdLine := scanner.Text()
+			args := strings.Fields(cmdLine)
+
+			peerCmd := peer.NewCommand()
+			peerCmd.SetArgs(args)
+			if err := peerCmd.Execute(); err != nil {
 				logger.Errorln("Error executing command:", "error", err)
 			}
 		}
