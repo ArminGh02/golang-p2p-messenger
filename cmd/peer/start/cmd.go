@@ -39,7 +39,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	resp, err := http.Post(stunURL+"/peer", "application/json", bytes.NewBuffer(body))
+	resp, err := http.Post(stunURL+"/peer/", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return errors.Wrapf(err, "failed to connect to STUN server: %s", stunURL)
 	}

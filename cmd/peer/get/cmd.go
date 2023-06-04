@@ -53,6 +53,6 @@ func run(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	cmd.Printf("peer info: %#v\n", respBody.Peers[0])
+	cmd.Printf("peer info: %v\n", respBody.Peers[0])
 	return nil
 }

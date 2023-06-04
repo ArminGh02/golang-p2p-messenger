@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ArminGh02/golang-p2p-messenger/internal/peer"
@@ -89,28 +87,7 @@ func (s *Stun) postPeer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Stun) getPeer(w http.ResponseWriter, r *http.Request) {
-	var (
-		resp response.GetPeer
-		enc  = json.NewEncoder(w)
-	)
-
-	parse := func(path string) (username string, err error) {
-		if path == "/peer" {
-			return "", nil
-		}
-		if !strings.HasPrefix(path, "/peer/") {
-			return "", errors.Errorf("invalid path %q", path)
-		}
-		return path[len("/peer/"):], nil
-	}
-
-	username, err := parse(r.URL.Path)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		resp.Error = fmt.Sprintf("error parsing path: %v", err)
-		enc.Encode(resp)
-		return
-	}
+	username := r.URL.Path[len("/peer/"):]
 
 	if username == "" {
 		s.listPeers(w, r)

@@ -36,7 +36,7 @@ func main() {
 	stun := stun.New(redis, logger)
 
 	mux := http.NewServeMux()
-	mux.Handle("/peer", stun.PeerHandler())
+	mux.Handle("/peer/", stun.PeerHandler())
 	// TODO add healthz
 
 	// TODO use config

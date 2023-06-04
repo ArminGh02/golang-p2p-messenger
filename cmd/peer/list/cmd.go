@@ -44,6 +44,6 @@ func run(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("something went wrong when trying to get the list of peers from the server at %s. error: %s", stunURL, respBody.Error)
 	}
 
-	cmd.Printf("peers list: %#v\n", respBody.Peers)
+	cmd.Printf("peers list: %v\n", respBody.Peers)
 	return nil
 }

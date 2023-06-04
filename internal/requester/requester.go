@@ -7,10 +7,7 @@ import (
 )
 
 func GetPeer(serverAddr, targetUsername string) (resp *http.Response, err error) {
-	url := serverAddr + "/peer"
-	if targetUsername != "" {
-		url += "/" + targetUsername
-	}
+	url := serverAddr + "/peer/" + targetUsername
 
 	resp, err = http.Get(url)
 	if err != nil {
