@@ -3,10 +3,12 @@ package start
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/ArminGh02/golang-p2p-messenger/internal/request"
 	"github.com/ArminGh02/golang-p2p-messenger/internal/response"
@@ -32,7 +34,11 @@ func run(cmd *cobra.Command, args []string) error {
 		panic(err)
 	}
 
-	req := request.PostPeer{Username: username}
+	req := request.PostPeer{
+		Username: username,
+		TCPAddr:  fmt.Sprintf("http://localhost:%d", viper.GetUint16("tcp-port")),
+		UDPAddr:  fmt.Sprintf("http://localhost:%d", viper.GetUint16("udp-port")),
+	}
 
 	body, err := json.Marshal(&req)
 	if err != nil {
