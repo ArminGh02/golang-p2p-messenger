@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer/get"
-	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer/list"
 	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer/send"
 	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer/start"
 )
@@ -27,7 +26,6 @@ func NewCommand() *cobra.Command {
 
 	cmd.AddCommand(
 		start.NewCommand(), // start connection to stun
-		list.NewCommand(),  // list all peers
 		get.NewCommand(),   // get peer by username
 		send.NewCommand(),  // send image/text to a peer
 	)

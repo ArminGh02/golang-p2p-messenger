@@ -5,19 +5,43 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/ArminGh02/golang-p2p-messenger/internal/requester"
 	"github.com/ArminGh02/golang-p2p-messenger/internal/response"
 )
 
+var (
+	logger *logrus.Logger
+
+	all bool
+)
+
 func NewCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "get <target username>",
+	cmd := &cobra.Command{
+		Use:   "get <target username> OR get --all",
 		Short: "get the peer with specified username",
 		RunE:  run,
-		Args:  cobra.ExactArgs(1),
+		Args:  validateArgs,
 	}
+
+	cmd.Flags().BoolVarP(&all, "all", "a", false, "list all peers")
+
+	logger = logrus.New()
+	logger.Out = cmd.OutOrStdout()
+
+	return cmd
+}
+
+func validateArgs(cmd *cobra.Command, args []string) error {
+	if len(args) == 1 && all {
+		return errors.New("a username argument is provided and --all flag is set simultaneously")
+	}
+	if len(args) == 0 && !all {
+		return errors.New("--all flag is not set and no arguments for target username is provided")
+	}
+	return nil
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -26,7 +50,10 @@ func run(cmd *cobra.Command, args []string) error {
 		panic(err)
 	}
 
-	targetUsername := args[0]
+	var targetUsername string
+	if !all {
+		targetUsername = args[0]
+	}
 
 	resp, err := requester.GetPeer(stunURL, targetUsername)
 	if err != nil {
@@ -53,6 +80,10 @@ func run(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	cmd.Printf("peer info: %v\n", respBody.Peers[0])
+	if all {
+		cmd.Printf("peers info: %v\n", respBody.Peers)
+	} else {
+		cmd.Printf("peer info: %v\n", respBody.Peers[0])
+	}
 	return nil
 }
