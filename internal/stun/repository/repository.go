@@ -1,6 +1,10 @@
 package repository
 
-import "context"
+import (
+	"context"
+
+	"github.com/pkg/errors"
+)
 
 type Repository[T any] interface {
 	Ping(ctx context.Context) (pong string, err error)
@@ -12,3 +16,5 @@ type Repository[T any] interface {
 	Size(ctx context.Context) (int64, error)
 	Close() error
 }
+
+var ErrNotFound = errors.New("no such record")

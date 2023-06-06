@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/ArminGh02/golang-p2p-messenger/internal/stun/repository"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
 )
@@ -35,8 +36,13 @@ func (r *Redis[T]) Close() error {
 
 func (r *Redis[T]) Get(ctx context.Context, key string) (val T, err error) {
 	res, err := r.client.Get(ctx, key).Result()
+	if err == redis.Nil {
+		err = repository.ErrNotFound
+		return
+	}
 	if err != nil {
-		return val, errors.Wrapf(err, "error getting value of key %v", key)
+		err = errors.Wrapf(err, "error getting value of key %v", key)
+		return
 	}
 
 	err = json.Unmarshal([]byte(res), &val)
@@ -66,8 +72,9 @@ func (r *Redis[T]) Keys(ctx context.Context) (keys []string, err error) {
 	for iter.Next(ctx) {
 		keys = append(keys, iter.Val())
 	}
-	if err := iter.Err(); err != nil {
-		return nil, err
+	if err = iter.Err(); err != nil {
+		keys = nil
+		return
 	}
 	return
 }
@@ -103,7 +110,7 @@ func (r *Redis[T]) Values(ctx context.Context) (values []T, err error) {
 			break
 		}
 	}
-	return values, nil
+	return
 }
 
 func (r *Redis[T]) Size(ctx context.Context) (int64, error) {
