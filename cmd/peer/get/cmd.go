@@ -62,20 +62,27 @@ func run(cmd *cobra.Command, args []string) error {
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return errors.Errorf("failed to get peer from server at %s with status: %s", stunURL, resp.Status)
-	}
-
 	var respBody response.GetPeer
 	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
 		return err
 	}
 
-	if !respBody.OK {
+	if resp.StatusCode == http.StatusNotFound {
 		return errors.Errorf(
-			"peer with username %s not found on the server at %s. error: %s",
+			"peer with username %s not found on the server at %s with status %s and error: %s",
 			targetUsername,
 			stunURL,
+			resp.Status,
+			respBody.Error,
+		)
+	}
+
+	if resp.StatusCode != http.StatusOK || !respBody.OK {
+		return errors.Errorf(
+			"failed to get username %s from server at %s with status %s and error: %s",
+			targetUsername,
+			stunURL,
+			resp.Status,
 			respBody.Error,
 		)
 	}
