@@ -12,7 +12,7 @@ import (
 
 var logger *logrus.Logger
 
-func NewCommand() *cobra.Command {
+func NewCommand(exitCmd *cobra.Command) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "peer <command> [options]",
 		Short: "Command line p2p messenger",
@@ -28,12 +28,11 @@ func NewCommand() *cobra.Command {
 		start.NewCommand(), // start connection to stun
 		get.NewCommand(),   // get peer by username
 		send.NewCommand(),  // send image/text to a peer
+		exitCmd,
 	)
 
 	logger = logrus.New()
 	logger.Out = cmd.OutOrStdout()
-
-	logger.Infoln("successful peer")
 
 	return cmd
 }

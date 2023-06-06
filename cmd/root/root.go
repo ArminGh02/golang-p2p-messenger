@@ -5,12 +5,10 @@ import (
 	"context"
 	"fmt"
 	"image"
-	"io"
 	"net"
 	"os"
 	"strings"
 
-	homedir "github.com/mitchellh/go-homedir"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -29,35 +27,28 @@ var (
 )
 
 func initConfig() {
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		home, err := homedir.Dir()
-		cobra.CheckErr(err)
-
-		viper.AddConfigPath(home)
-		viper.AddConfigPath(".")
-		viper.SetConfigName("config")
+	if cfgFile == "" {
+		cfgFile = "config.yaml"
 	}
 
+	viper.SetConfigFile(cfgFile)
 	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
-	}
+	viper.ReadInConfig()
 }
 
-func NewCommand() *cobra.Command {
+func NewCommand(exitCmd *cobra.Command) *cobra.Command {
 	cobra.OnInitialize(initConfig)
 
 	cmd := &cobra.Command{
 		Use:   "messenger",
 		Short: "Command line p2p messenger",
-		RunE:  run,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return run(cmd, args, exitCmd)
+		},
 	}
 
-	cmd.Flags().Uint16VarP(&udpPort, "tcp-port", "t", 8081, "TCP port to listen on")
-	cmd.Flags().Uint16VarP(&tcpPort, "udp-port", "u", 8082, "UDP port to listen on")
+	cmd.Flags().Uint16VarP(&tcpPort, "tcp-port", "t", 8081, "TCP port to listen on")
+	cmd.Flags().Uint16VarP(&udpPort, "udp-port", "u", 8082, "UDP port to listen on")
 	cmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/config.yaml and current directory)")
 
 	viper.BindPFlag("tcp-port", cmd.Flags().Lookup("tcp-port"))
@@ -69,15 +60,15 @@ func NewCommand() *cobra.Command {
 	return cmd
 }
 
-func run(cmd *cobra.Command, args []string) error {
+func run(cmd *cobra.Command, args []string, exitCmd *cobra.Command) error {
 	txtChan := make(chan string)
 	imgChan := make(chan image.Image)
 
 	defer close(txtChan)
 	defer close(imgChan)
 
-	go loopPrintOutput(cmd.Context(), cmd.OutOrStderr(), txtChan, imgChan)
-	go loopRunCommand(cmd)
+	go loopPrintOutput(cmd, txtChan, imgChan)
+	go loopRunCommand(cmd, exitCmd)
 
 	group, ctx := errgroup.WithContext(cmd.Context())
 	group.Go(func() error { return loopReceiveText(ctx, txtChan) })
@@ -86,24 +77,32 @@ func run(cmd *cobra.Command, args []string) error {
 	return group.Wait()
 }
 
-func loopRunCommand(cmd *cobra.Command) {
-	scanner := bufio.NewScanner(os.Stdin)
+func loopRunCommand(cmd *cobra.Command, exitCmd *cobra.Command) {
+	lines := make(chan string)
+
+	go func(lines chan<- string) {
+		s := bufio.NewScanner(os.Stdin)
+		for s.Scan() {
+			lines <- s.Text()
+		}
+	}(lines)
+
 	for {
+		cmd.Print(prompt() + " ")
 		select {
 		case <-cmd.Context().Done():
 			return
-		default:
-			cmd.Printf("%s@%s$ ", viper.GetString("username"), viper.GetString("server"))
-
-			scanner.Scan()
-			cmdLine := scanner.Text()
-			args := strings.Fields(cmdLine)
-
-			peerCmd := peer.NewCommand()
+		case line := <-lines:
+			peerCmd := peer.NewCommand(exitCmd)
+			args := strings.Fields(line)
 			peerCmd.SetArgs(args)
 			if err := peerCmd.Execute(); err != nil {
 				logger.Errorln("Error executing command:", "error", err)
+				// break
 			}
+			// if err := viper.WriteConfigAs("config.yaml"); err != nil {
+			// 	logger.Errorln("Error writing config", "error", err)
+			// }
 		}
 	}
 }
@@ -114,27 +113,41 @@ func loopReceiveText(ctx context.Context, out chan<- string) error {
 		return err
 	}
 
+	type connErrPair struct {
+		conn net.Conn
+		err  error
+	}
+	conns := make(chan connErrPair)
+	go func(conns chan<- connErrPair) {
+		for {
+			conn, err := lis.Accept()
+			conns <- connErrPair{conn, err}
+		}
+	}(conns)
+
+	errs := make(chan error)
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		default:
-			conn, err := lis.Accept()
+		case connErr := <-conns:
+			conn, err := connErr.conn, connErr.err
 			if err != nil {
 				return err
 			}
 
-			group, _ := errgroup.WithContext(ctx)
-			group.Go(func() error {
+			go func() {
 				defer conn.Close()
 				txt, err := protocol.ReceiveText(conn)
 				if err != nil {
-					return err
+					errs <- err
+					return
 				}
 				out <- string(txt)
-				return nil
-			})
-			return group.Wait()
+			}()
+		case err := <-errs:
+			return err
 		}
 	}
 }
@@ -143,15 +156,15 @@ func loopReceiveImage(ctx context.Context, out chan<- image.Image) error {
 	return nil
 }
 
-func loopPrintOutput(ctx context.Context, out io.Writer, txtChan <-chan string, imgChan <-chan image.Image) {
+func loopPrintOutput(cmd *cobra.Command, txtChan <-chan string, imgChan <-chan image.Image) {
 	for {
 		select {
-		case <-ctx.Done():
+		case <-cmd.Context().Done():
 			return
 		case <-imgChan:
 			// store image and print path
 		case txt := <-txtChan:
-			fmt.Fprintf(out, "received message: %q", txt)
+			cmd.Printf("\rreceived message: %q\n%s ", txt, prompt())
 		}
 	}
 }
