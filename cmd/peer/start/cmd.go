@@ -19,7 +19,6 @@ func NewCommand() *cobra.Command {
 		Use:   "start",
 		Short: "start peer and connect to STUN with specified username",
 		RunE:  run,
-		// Args:  cobra.ExactArgs(2),
 	}
 }
 
@@ -29,6 +28,10 @@ func run(cmd *cobra.Command, args []string) error {
 		panic(err)
 	}
 
+	if username == "" {
+		return errors.New("username is empty")
+	}
+
 	stunURL, err := cmd.Flags().GetString("server")
 	if err != nil {
 		panic(err)
@@ -36,8 +39,8 @@ func run(cmd *cobra.Command, args []string) error {
 
 	req := request.PostPeer{
 		Username: username,
-		TCPAddr:  fmt.Sprintf("http://localhost:%d", viper.GetUint16("tcp-port")),
-		UDPAddr:  fmt.Sprintf("http://localhost:%d", viper.GetUint16("udp-port")),
+		TCPAddr:  fmt.Sprintf("localhost:%d", viper.GetUint16("tcp-port")),
+		UDPAddr:  fmt.Sprintf("localhost:%d", viper.GetUint16("udp-port")),
 	}
 
 	body, err := json.Marshal(&req)
@@ -48,6 +51,10 @@ func run(cmd *cobra.Command, args []string) error {
 	resp, err := http.Post(stunURL+"/peer/", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return errors.Wrapf(err, "failed to connect to STUN server: %s", stunURL)
+	}
+
+	if resp.StatusCode == http.StatusConflict {
+		return errors.Errorf("username already exists")
 	}
 
 	if resp.StatusCode != http.StatusOK {
