@@ -2,10 +2,13 @@ package protocol
 
 import (
 	"bytes"
-	"encoding/binary"
+	"fmt"
 	"image"
 	"net"
 	"os"
+	"strconv"
+
+	"github.com/pkg/errors"
 )
 
 func SendImage(targetAddr string, filename string) error {
@@ -21,12 +24,7 @@ func SendImage(targetAddr string, filename string) error {
 		return err
 	}
 
-	addr, err := net.ResolveUDPAddr("udp", targetAddr)
-	if err != nil {
-		return err
-	}
-
-	conn, err := net.DialUDP("udp", nil, addr)
+	conn, err := net.Dial("udp", targetAddr)
 	if err != nil {
 		return err
 	}
@@ -40,12 +38,7 @@ func SendImage(targetAddr string, filename string) error {
 }
 
 func SendText(targetAddr string, text string) error {
-	addr, err := net.ResolveTCPAddr("tcp", targetAddr)
-	if err != nil {
-		return err
-	}
-
-	conn, err := net.DialTCP("tcp", nil, addr)
+	conn, err := net.Dial("tcp", targetAddr)
 	if err != nil {
 		return err
 	}
@@ -53,24 +46,36 @@ func SendText(targetAddr string, text string) error {
 	defer conn.Close()
 
 	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, uint64(len(text)))
+	buf.Write([]byte(fmt.Sprintf("%064d", len(text))))
 	buf.Write([]byte(text))
 	_, err = conn.Write(buf.Bytes())
 	return err
 }
 
 func ReceiveText(conn net.Conn) (res []byte, err error) {
-	var buf [64]byte
-	n, err := conn.Read(buf[:])
-	if err != nil || n != 64 {
+	buf := make([]byte, 64)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return
+	}
+	if n != 64 {
+		err = errors.New("could not read 64 header bytes")
 		return
 	}
 
-	msgLen := binary.BigEndian.Uint64(buf[:])
+	msgLen, err := strconv.Atoi(string(buf))
+	if err != nil {
+		panic(err)
+	}
+
 	res = make([]byte, msgLen)
 	n, err = conn.Read(res)
-	if err != nil || uint64(n) != msgLen {
-		return nil, err
+	if err != nil {
+		res = nil
+		return
+	}
+	if n != msgLen {
+		return nil, errors.New("could not read the whole message")
 	}
 
 	return
