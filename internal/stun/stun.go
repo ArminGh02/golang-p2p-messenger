@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ArminGh02/golang-p2p-messenger/internal/peer"
@@ -63,7 +64,7 @@ func (s *Stun) postPeer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if usernameExists {
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusConflict)
 		resp.Error = fmt.Sprintf("username %q already exists", req.Username)
 		enc.Encode(resp)
 		return
@@ -124,6 +125,12 @@ func (s *Stun) peerByUsername(w http.ResponseWriter, username string) {
 	)
 
 	p, err := s.repo.Get(context.Background(), username)
+	if errors.Is(err, repository.ErrNotFound) {
+		w.WriteHeader(http.StatusNotFound)
+		resp.Error = fmt.Sprintf("there is no peer with username %s", username)
+		enc.Encode(resp)
+		return
+	}
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		resp.Error = fmt.Sprintf("error getting peer: %v", err)
