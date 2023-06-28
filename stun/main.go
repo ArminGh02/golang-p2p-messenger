@@ -59,7 +59,9 @@ func main() {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			logger.Fatalln(err)
+		}
 	}()
 
 	logger.Infoln("Starting server on address", srv.Addr)

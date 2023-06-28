@@ -8,7 +8,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/ArminGh02/golang-p2p-messenger/internal/requester"
 	"github.com/ArminGh02/golang-p2p-messenger/internal/response"
 )
 
@@ -45,7 +44,7 @@ func validateArgs(cmd *cobra.Command, args []string) error {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	stunURL, err := cmd.Flags().GetString("server")
+	stunAddr, err := cmd.Flags().GetString("server")
 	if err != nil {
 		panic(err)
 	}
@@ -55,9 +54,14 @@ func run(cmd *cobra.Command, args []string) error {
 		targetUsername = args[0]
 	}
 
-	resp, err := requester.GetPeer(stunURL, targetUsername)
+	resp, err := http.Get(stunAddr + "/peer/" + targetUsername)
 	if err != nil {
-		return err
+		return errors.Wrapf(
+			err,
+			"failed to make the get request for target username %q from server at %q",
+			targetUsername,
+			stunAddr,
+		)
 	}
 
 	defer resp.Body.Close()
@@ -71,7 +75,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return errors.Errorf(
 			"peer with username %s not found on the server at %s with status %s and error: %s",
 			targetUsername,
-			stunURL,
+			stunAddr,
 			resp.Status,
 			respBody.Error,
 		)
@@ -81,7 +85,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return errors.Errorf(
 			"failed to get username %s from server at %s with status %s and error: %s",
 			targetUsername,
-			stunURL,
+			stunAddr,
 			resp.Status,
 			respBody.Error,
 		)

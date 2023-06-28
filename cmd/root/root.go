@@ -2,11 +2,9 @@ package root
 
 import (
 	"bufio"
-	"context"
-	"fmt"
 	"image"
-	"net"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -15,7 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/ArminGh02/golang-p2p-messenger/cmd/peer"
-	"github.com/ArminGh02/golang-p2p-messenger/internal/protocol"
+	"github.com/ArminGh02/golang-p2p-messenger/internal/imgutil"
 )
 
 var (
@@ -62,18 +60,17 @@ func NewCommand(exitCmd *cobra.Command) *cobra.Command {
 
 func run(cmd *cobra.Command, args []string, exitCmd *cobra.Command) error {
 	txtChan := make(chan string)
-	imgChan := make(chan image.Image)
+	imgChan := make(chan imageData)
 
 	defer close(txtChan)
 	defer close(imgChan)
 
-	go loopPrintOutput(cmd, txtChan, imgChan)
 	go loopRunCommand(cmd, exitCmd)
+	go loopPrintOutput(cmd, txtChan, imgChan)
 
 	group, ctx := errgroup.WithContext(cmd.Context())
 	group.Go(func() error { return loopReceiveText(ctx, txtChan) })
 	group.Go(func() error { return loopReceiveImage(ctx, imgChan) })
-
 	return group.Wait()
 }
 
@@ -107,62 +104,36 @@ func loopRunCommand(cmd *cobra.Command, exitCmd *cobra.Command) {
 	}
 }
 
-func loopReceiveText(ctx context.Context, out chan<- string) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", tcpPort))
-	if err != nil {
-		return err
-	}
-
-	type connErrPair struct {
-		conn net.Conn
-		err  error
-	}
-	conns := make(chan connErrPair)
-	go func(conns chan<- connErrPair) {
-		for {
-			conn, err := lis.Accept()
-			conns <- connErrPair{conn, err}
-		}
-	}(conns)
-
-	errs := make(chan error)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case connErr := <-conns:
-			conn, err := connErr.conn, connErr.err
-			if err != nil {
-				return err
-			}
-
-			go func() {
-				defer conn.Close()
-				txt, err := protocol.ReceiveText(conn)
-				if err != nil {
-					errs <- err
-					return
-				}
-				out <- string(txt)
-			}()
-		case err := <-errs:
-			return err
-		}
-	}
+type imageData struct {
+	image.Image
+	filename string
+	username string
 }
 
-func loopReceiveImage(ctx context.Context, out chan<- image.Image) error {
-	return nil
-}
-
-func loopPrintOutput(cmd *cobra.Command, txtChan <-chan string, imgChan <-chan image.Image) {
+func loopPrintOutput(cmd *cobra.Command, txtChan <-chan string, imgChan <-chan imageData) {
 	for {
 		select {
 		case <-cmd.Context().Done():
 			return
-		case <-imgChan:
-			// store image and print path
+
+		case img := <-imgChan:
+			logger.Infoln("creating", img.filename)
+			f, err := os.Create("~/new" + img.filename)
+			if err != nil {
+				logger.Error(err)
+				break
+			}
+
+			logger.Infoln("created")
+
+			format := strings.ToLower(filepath.Ext(img.filename))
+			if err := imgutil.Encode(f, img, format); err != nil {
+				logger.Error(err)
+				break
+			}
+
+			logger.Infof("received file %q from %q\n", img.filename, img.username)
+
 		case txt := <-txtChan:
 			cmd.Printf("\rreceived message: %q\n%s ", txt, prompt())
 		}

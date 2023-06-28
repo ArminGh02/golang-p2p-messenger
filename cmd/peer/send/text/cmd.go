@@ -2,12 +2,12 @@ package text
 
 import (
 	"encoding/json"
+	"net/http"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/pkg/errors"
 
 	"github.com/ArminGh02/golang-p2p-messenger/internal/protocol"
-	"github.com/ArminGh02/golang-p2p-messenger/internal/requester"
 	"github.com/ArminGh02/golang-p2p-messenger/internal/response"
 )
 
@@ -21,7 +21,7 @@ func NewCommand() *cobra.Command {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	stunURL, err := cmd.Flags().GetString("server")
+	stunAddr, err := cmd.Flags().GetString("server")
 	if err != nil {
 		panic(err)
 	}
@@ -31,15 +31,20 @@ func run(cmd *cobra.Command, args []string) error {
 		text           = args[1]
 	)
 
-	resp, err := requester.GetPeer(stunURL, targetUsername)
+	resp, err := http.Get(stunAddr + "/peer/" + targetUsername)
 	if err != nil {
-		return err
+		return errors.Wrapf(
+			err,
+			"failed to make the get request for target username %q from server at %q",
+			targetUsername,
+			stunAddr,
+		)
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return errors.Errorf("failed to get peer from server at %s with status: %s", stunURL, resp.Status)
+		return errors.Errorf("failed to get peer from server at %s with status: %s", stunAddr, resp.Status)
 	}
 
 	var respBody response.GetPeer
@@ -51,7 +56,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return errors.Errorf(
 			"something went wrong retrieving peer with username %s on server at %s. error: %s",
 			targetUsername,
-			stunURL,
+			stunAddr,
 			respBody.Error,
 		)
 	}

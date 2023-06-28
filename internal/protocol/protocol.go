@@ -1,54 +1,136 @@
 package protocol
 
 import (
-	"bytes"
+	"encoding/json"
 	"fmt"
-	"image"
+	"image/color"
+	"log"
 	"net"
-	"os"
+	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
-func SendImage(targetAddr string, filename string) error {
-	f, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
+const (
+	UsernameMaxLength  = 64
+	FilenameMaxLength  = 64
+	PayloadPixelsCount = 256
 
-	defer f.Close()
+	DefaultTimeout = 5 * time.Second
+	ImageTimeout   = 30 * time.Second
+)
 
-	_, _, err = image.Decode(f)
-	if err != nil {
-		return err
-	}
+type ImagePacket struct {
+	Sender   [UsernameMaxLength]byte
+	Filename [FilenameMaxLength]byte
+	Width    uint64
+	Height   uint64
+	Row      uint64
+	Offset   uint64
+	Pixels   [PayloadPixelsCount]uint32
+}
 
-	conn, err := net.Dial("udp", targetAddr)
+type ImageACKPacket struct {
+	Username  [UsernameMaxLength]byte
+	Filename  [FilenameMaxLength]byte
+	Flag      bool
+	AckNumber uint64
+}
+
+func SendImage(targetAddr string, pixels [][]color.RGBA, filename string, sender string) error {
+	conn, err := net.DialTimeout("udp", targetAddr, DefaultTimeout)
 	if err != nil {
+		if err, ok := err.(net.Error); ok && err.Timeout() {
+			return errors.Wrapf(err, "%s timeout reached when dialling %s", DefaultTimeout, targetAddr)
+		}
 		return err
 	}
 
 	defer conn.Close()
 
-	// checksum
-	// row number
-	// what to do when a packet is lost?
-	return nil
+	var bFilename [FilenameMaxLength]byte
+	copy(bFilename[:], filename)
+
+	var bSender [UsernameMaxLength]byte
+	copy(bSender[:], sender)
+
+	var packetPixels [PayloadPixelsCount]uint32
+	var packetsCount int
+
+	var group errgroup.Group
+	group.SetLimit(runtime.NumCPU())
+
+	limiter := time.Tick(100 * time.Millisecond)
+
+	for i, row := range pixels {
+		for j, pix := range row {
+			packetPixels[j%PayloadPixelsCount] = uint32(pix.R)<<24 + uint32(pix.G)<<16 + uint32(pix.B)<<8 + uint32(pix.A)
+
+			if j%PayloadPixelsCount != PayloadPixelsCount-1 {
+				if j != len(row)-1 {
+					continue
+				}
+			}
+
+			p := ImagePacket{
+				Sender:   bSender,
+				Filename: bFilename,
+				Width:    uint64(len(pixels[0])),
+				Height:   uint64(len(pixels)),
+				Row:      uint64(i),
+				Offset:   uint64(j / PayloadPixelsCount),
+				Pixels:   packetPixels,
+			}
+
+			b, err := json.Marshal(p)
+			if err != nil {
+				panic(err)
+			}
+
+			packetsCount++
+
+			group.Go(func() error {
+				<-limiter
+
+				conn.SetWriteDeadline(time.Now().Add(DefaultTimeout))
+				_, err := conn.Write(b)
+
+				// wait for ack receipt
+				// if no ack received resend and retry for 2 times
+				// if still no ack, cancel the whole operation
+
+				return err
+			})
+		}
+	}
+
+	log.Printf("a total of %d packets sent\n", packetsCount)
+
+	return group.Wait()
 }
 
 func SendText(targetAddr string, text string) error {
-	conn, err := net.Dial("tcp", targetAddr)
+	conn, err := net.DialTimeout("tcp", targetAddr, DefaultTimeout)
 	if err != nil {
+		if err, ok := err.(net.Error); ok && err.Timeout() {
+			return errors.Wrapf(err, "%s timeout reached when dialling %s", DefaultTimeout, targetAddr)
+		}
 		return err
 	}
 
 	defer conn.Close()
 
-	var buf bytes.Buffer
-	buf.Write([]byte(fmt.Sprintf("%064d", len(text))))
-	buf.Write([]byte(text))
-	_, err = conn.Write(buf.Bytes())
+	msg := fmt.Sprintf("%064d%s", len(text), text)
+	conn.SetWriteDeadline(time.Now().Add(DefaultTimeout))
+	_, err = conn.Write([]byte(msg))
+	if err != nil {
+		if err, ok := err.(net.Error); ok && err.Timeout() {
+			return errors.Wrapf(err, "%s timeout reached when writing message to %s", DefaultTimeout, targetAddr)
+		}
+	}
 	return err
 }
 

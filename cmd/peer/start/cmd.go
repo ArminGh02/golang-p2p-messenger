@@ -32,7 +32,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return errors.New("username is empty")
 	}
 
-	stunURL, err := cmd.Flags().GetString("server")
+	stunAddr, err := cmd.Flags().GetString("server")
 	if err != nil {
 		panic(err)
 	}
@@ -48,9 +48,9 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	resp, err := http.Post(stunURL+"/peer/", "application/json", bytes.NewBuffer(body))
+	resp, err := http.Post(stunAddr+"/peer/", "application/json", bytes.NewBuffer(body))
 	if err != nil {
-		return errors.Wrapf(err, "failed to connect to STUN server: %s", stunURL)
+		return errors.Wrapf(err, "failed to connect to STUN server: %s", stunAddr)
 	}
 
 	if resp.StatusCode == http.StatusConflict {
@@ -58,7 +58,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.Errorf("failed to connect to STUN server at %s with status: %s", stunURL, resp.Status)
+		return errors.Errorf("failed to connect to STUN server at %s with status: %s", stunAddr, resp.Status)
 	}
 
 	var respBody response.PostPeer
@@ -67,7 +67,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if !respBody.OK {
-		return errors.Errorf("failed to connect to STUN server at %s: %s", stunURL, respBody.Error)
+		return errors.Errorf("failed to connect to STUN server at %s: %s", stunAddr, respBody.Error)
 	}
 
 	return nil
