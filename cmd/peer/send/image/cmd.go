@@ -101,8 +101,6 @@ func run(cmd *cobra.Command, args []string) error {
 
 	pixels := imgutil.ToPixels(img)
 
-	cmd.Print("pixels h,w:", len(pixels), len(pixels[0]))
-
-	cmd.Print("sending...")
+	cmd.Println("sending...")
 	return protocol.SendImage(targetAddr, pixels, imageFilename, username)
 }

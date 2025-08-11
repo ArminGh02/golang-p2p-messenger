@@ -1,0 +1,4 @@
+server: http://localhost:8080
+tcp-port: "8083"
+udp-port: "8084"
+username: new

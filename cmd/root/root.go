@@ -117,14 +117,11 @@ func loopPrintOutput(cmd *cobra.Command, txtChan <-chan string, imgChan <-chan i
 			return
 
 		case img := <-imgChan:
-			logger.Infoln("creating", img.filename)
-			f, err := os.Create("~/new" + img.filename)
+			f, err := os.Create("new" + img.filename)
 			if err != nil {
 				logger.Error(err)
 				break
 			}
-
-			logger.Infoln("created")
 
 			format := strings.ToLower(filepath.Ext(img.filename))
 			if err := imgutil.Encode(f, img, format); err != nil {

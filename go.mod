@@ -3,7 +3,7 @@ module github.com/ArminGh02/golang-p2p-messenger
 go 1.19
 
 require (
-	github.com/mitchellh/go-homedir v1.1.0
+	github.com/gorilla/mux v1.8.0
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.0.4
 	github.com/sirupsen/logrus v1.9.2

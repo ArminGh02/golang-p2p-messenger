@@ -4,66 +4,81 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/ArminGh02/golang-p2p-messenger/internal/imgutil"
 	"image/color"
 	"io"
 	"log"
 	"math"
 	"net"
 
-	"github.com/ArminGh02/golang-p2p-messenger/internal/protocol"
 	"github.com/pkg/errors"
+
+	"github.com/ArminGh02/golang-p2p-messenger/internal/imgutil"
+	"github.com/ArminGh02/golang-p2p-messenger/internal/protocol"
 )
 
-type packetData struct {
+type storedPacket struct {
 	row    uint64
 	offset uint64
 	pixels []color.RGBA
 }
 
+type rowOffsetPair struct {
+	row    uint64
+	offset uint64
+}
+
+type userFilePair struct {
+	username string
+	filename string
+}
+
 func loopReceiveImage(ctx context.Context, out chan<- imageData) error {
 	conn, err := net.ListenPacket("udp", fmt.Sprintf(":%d", udpPort))
-	logger.Infoln("listening udp")
 	if err != nil {
 		return errors.Wrapf(err, "unable to start listening on port %d for UDP packets", udpPort)
 	}
-
 	defer conn.Close()
 
-	packetsChan := make(chan protocol.ImagePacket)
+	type sharedPacket struct {
+		imgPacket protocol.ImagePacket
+		addr      net.Addr
+	}
+	packetsChan := make(chan sharedPacket)
+	defer close(packetsChan)
+
 	go func() {
-		type key struct {
-			username [protocol.UsernameMaxLength]byte
-			filename [protocol.FilenameMaxLength]byte
-		}
-		packets := make(map[key][]packetData)
-		for {
-			select {
-			case imgPacket := <-packetsChan:
-				key := key{imgPacket.Sender, imgPacket.Filename}
+		packets := make(map[userFilePair]map[rowOffsetPair]storedPacket)
+		for p := range packetsChan {
+			imgPacket := p.imgPacket
+			addr := p.addr
 
-				allPacketsCount := imgPacket.Height * uint64(math.Ceil(float64(imgPacket.Width)/protocol.PayloadPixelsCount))
-				if packets[key] == nil {
-					packets[key] = make([]packetData, 0, allPacketsCount)
-				}
+			key := userFilePair{imgPacket.Sender, imgPacket.Filename}
+			rowOffset := rowOffsetPair{imgPacket.Row, imgPacket.Offset}
 
-				packets[key] = append(packets[key], pcktData(imgPacket))
+			allPacketsCount := imgPacket.Height * uint64(math.Ceil(float64(imgPacket.Width)/protocol.PayloadPixelsCount))
+			if packets[key] == nil {
+				packets[key] = make(map[rowOffsetPair]storedPacket, allPacketsCount)
+			}
 
-				// mark packet (row,seq) as received so that we don't store duplicates
-				// send ack for this packet
+			if _, duplicate := packets[key][rowOffset]; duplicate {
+				continue
+			}
 
-				logger.Infoln("len =", len(packets[key]), "allPacketsCount =", allPacketsCount)
+			packets[key][rowOffset] = toStoredPacket(imgPacket)
 
-				if uint64(len(packets[key])) == allPacketsCount {
-					reassembleImage(
-						packets[key],
-						string(imgPacket.Sender[:]),
-						string(imgPacket.Filename[:]),
-						imgPacket.Width,
-						imgPacket.Height,
-						out,
-					)
-				}
+			ack(conn, addr, imgPacket)
+
+			logger.Infof("packet %d from %d\n", len(packets[key]), allPacketsCount)
+
+			if uint64(len(packets[key])) == allPacketsCount {
+				reassembleImage(
+					packets[key],
+					imgPacket.Sender,
+					imgPacket.Filename,
+					imgPacket.Width,
+					imgPacket.Height,
+					out,
+				)
 			}
 		}
 	}()
@@ -71,9 +86,7 @@ func loopReceiveImage(ctx context.Context, out chan<- imageData) error {
 	for {
 		buf := make([]byte, 256*256)
 
-		logger.Infoln("reading")
-
-		n, _, err := conn.ReadFrom(buf)
+		n, addr, err := conn.ReadFrom(buf)
 		if err != nil {
 			if err != io.EOF {
 				logger.Error("read error:", err)
@@ -81,20 +94,38 @@ func loopReceiveImage(ctx context.Context, out chan<- imageData) error {
 		}
 
 		go func() {
-			logger.Infoln("read it")
-
 			var imgPacket protocol.ImagePacket
 			if err := json.Unmarshal(buf[:n], &imgPacket); err != nil {
 				logger.Error(err)
 			}
 
-			packetsChan <- imgPacket
+			packetsChan <- sharedPacket{imgPacket, addr}
 		}()
 	}
 }
 
-func pcktData(imgPacket protocol.ImagePacket) packetData {
-	var pcktData packetData
+func ack(conn net.PacketConn, addr net.Addr, imgPacket protocol.ImagePacket) {
+	ack := protocol.ImageACKPacket{
+		Username: imgPacket.Sender,
+		Filename: imgPacket.Filename,
+		Flag:     true,
+		Offset:   imgPacket.Offset,
+		Row:      imgPacket.Row,
+	}
+
+	b, err := json.Marshal(ack)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = conn.WriteTo(b, addr)
+	if err != nil {
+		logger.Error(err)
+	}
+}
+
+func toStoredPacket(imgPacket protocol.ImagePacket) storedPacket {
+	var pcktData storedPacket
 	pcktData.offset = imgPacket.Offset
 	pcktData.row = imgPacket.Row
 	pcktData.pixels = make([]color.RGBA, protocol.PayloadPixelsCount)
@@ -110,7 +141,7 @@ func pcktData(imgPacket protocol.ImagePacket) packetData {
 }
 
 func reassembleImage(
-	packets []packetData,
+	packets map[rowOffsetPair]storedPacket,
 	username string,
 	filename string,
 	width uint64,
@@ -126,10 +157,8 @@ func reassembleImage(
 
 	for _, packet := range packets {
 		for i := 0; i < protocol.PayloadPixelsCount; i++ {
-			idx := packet.offset*protocol.PayloadPixelsCount + uint64(i)
-			if idx < width {
-				pixels[packet.row][idx] = packet.pixels[i]
-			}
+			col := packet.offset*protocol.PayloadPixelsCount + uint64(i)
+			pixels[packet.row][col] = packet.pixels[i]
 		}
 	}
 
